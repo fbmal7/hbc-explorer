@@ -7,8 +7,8 @@
 /coverage
 
 # generated from opcode docenzier.py scripts
-/asm-docs*
-/etc/scripts/asm-docs*
+/asm-docs
+/etc/scripts/asm-docs
 
 # user local customizations
 /etc/**/*.local.*

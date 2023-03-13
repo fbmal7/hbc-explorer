@@ -25,10 +25,7 @@
 import type {AsmResultSource, ParsedAsmResultLine} from '../../types/asmresult/asmresult.interfaces.js';
 import type {PreliminaryCompilerInfo} from '../../types/compiler.interfaces.js';
 import type {ParseFiltersAndOutputOptions} from '../../types/features/filters.interfaces.js';
-import type {IRResultLine} from '../../types/asmresult/asmresult.interfaces.js';
-import type {
-    BasicExecutionResult
-} from '../../types/execution/execution.interfaces.js';
+import type {BasicExecutionResult} from '../../types/execution/execution.interfaces.js';
 import {BaseCompiler} from '../base-compiler.js';
 import {resolvePathFromAppRoot} from '../utils.js';
 
@@ -39,9 +36,10 @@ export class HermesCompiler extends BaseCompiler {
         return 'hermes';
     }
 
-    static DUMP_BC:string = "--dump-bytecode";
-    static DUMP_IR:string = "--dump-ir";
-    static DUMP_LIR:string = "--dump-lir";
+    static DUMP_BC = '--dump-bytecode';
+    static DUMP_IR = '--dump-ir';
+    static DUMP_LIR = '--dump-lir';
+    static DUMP_LOC = '-dump-source-location=loc';
 
     constructor(compilerInfo: PreliminaryCompilerInfo, env) {
         super(compilerInfo, env);
@@ -49,33 +47,19 @@ export class HermesCompiler extends BaseCompiler {
     }
 
     override processAsm(result) {
-        const lineRe = /^;(\s+)(?<file>.*):(?<line>\d+):(?<col>\d+)$/;
-        const bytecodeLines = result.asm.split('\n');
-        const bytecodeResult: ParsedAsmResultLine[] = [];
-        let sourceLoc: AsmResultSource | null = null;
-        let srcText:any = null;
-        for (const line of bytecodeLines) {
-            srcText = line;
-            const match = line.match(lineRe);
-            if (match && match.groups) {
-                const line = parseInt(match.groups.line);
-                const column = parseInt(match.groups.col);
-                sourceLoc = {line, column, file: null};
-                continue;
-            }
-            bytecodeResult.push({text: srcText, source: sourceLoc});
-            sourceLoc = null;
-        }
-        return {asm: bytecodeResult};
+        const formatted = HermesCompiler.processNumberedLines(result.asm.split('\n'));
+        return {asm: formatted};
     }
 
-    override async generateIR(inputFilename: string, options: string[], filters: ParseFiltersAndOutputOptions) {
+    override async generateIR(inputFilename: string, userOptions: string[], filters: ParseFiltersAndOutputOptions) {
         const execOptions = this.getDefaultExecOptions();
-        // A higher max output is needed for when the user includes headers
         execOptions.maxOutput = 1024 * 1024 * 1024;
-        const myopts = options.concat(["--dump-ir", "-dump-source-location=loc"])
-                              .filter(e => e !== "--dump-bytecode");
-        const output = await this.runCompiler(this.compiler.exe, myopts, this.filename(inputFilename), execOptions);
+        const output = await this.runCompiler(
+            this.compiler.exe,
+            HermesCompiler.optionsForIR(userOptions),
+            this.filename(inputFilename),
+            execOptions,
+        );
         if (output.code !== 0) {
             return [{text: 'Failed to run compiler to get IR code'}];
         }
@@ -83,75 +67,61 @@ export class HermesCompiler extends BaseCompiler {
         return ir.asm;
     }
 
-    async processCompilerIROut(output, filters: ParseFiltersAndOutputOptions, inputFilename:string) {
-        const result: IRResultLine[] = [];
-        // ; /Users/fbmal7/tests/obj.js:1:1
-        let inputLines:any = [];
-        if (output.stdout.length == 0) {
-          inputLines = output.stderr;
-        } else {
-          inputLines = output.stdout;
-        }
-        const irLines = inputLines.reduce(
-          (accumulator, currentValue) => accumulator.concat(currentValue.text),
-          []
-        );
-        const lineRe = /^;(\s+)(?<file>.*):(?<line>\d+):(?<col>\d+)$/;
-        let sourceLoc: AsmResultSource | null = null;
-        let srcText:any = null;
-        for (const line of irLines) {
-            srcText = line;
-            const match = lineRe.exec(line);
-            if (match && match.groups) {
-                const lineno = parseInt(match.groups.line || '0');
-                const colno = parseInt(match.groups.col || '0');
-                sourceLoc = {file: null, line: lineno, column: colno};
-                continue;
-            }
-            result.push({text: line, source: sourceLoc });
-            sourceLoc = null;
-        }
-        return {
-            asm: result,
-            labelDefinitions: {},
-            languageId: 'llvm-ir',
-        };
-    }
-
+    // Compute the options passed to the compiler for generating bytecode.
+    // We will allow users to also pass -dump-ir at the compiler.
     override optionsForFilter(filters: ParseFiltersAndOutputOptions, outputFilename: string, userOptions: string[]) {
-        for (const opt of userOptions){
-          if (opt === HermesCompiler.DUMP_BC){
-            return [];
-          }
-          if (opt === HermesCompiler.DUMP_IR){
-            return [];
-          }
+        // If the user asked for BC or (L)IR already, don't append any new options.
+        // Otherwise default to dumping BC.
+        const dumpers = [HermesCompiler.DUMP_BC, HermesCompiler.DUMP_IR, HermesCompiler.DUMP_LIR];
+        for (const opt of userOptions) {
+            if (dumpers.includes(opt)) {
+                return [];
+            }
         }
         return [HermesCompiler.DUMP_BC];
     }
 
-    override getArgumentParser() {
-        return BaseParser;
+    static optionsForIR(userOptions: string[]) {
+        // We need to make sure we always pass in DUMP_IR and DUMP_LOC, but we can't have any duplicates.
+        // So if the user already typed those, don't add them again.
+        // We also need to keep passing in whatever else the user had typed.
+        // DUMP_BC is always passed in from the first step of the compiler, so we need to filter that out as well.
+        const opts = userOptions.filter(
+            e => e !== HermesCompiler.DUMP_BC && e !== HermesCompiler.DUMP_IR && e !== HermesCompiler.DUMP_LOC,
+        );
+        return opts.concat(HermesCompiler.DUMP_IR, HermesCompiler.DUMP_LOC);
     }
 
-    override orderArguments(
-        options: string[],
-        inputFilename: string,
-        libIncludes: string[],
-        libOptions: string[],
-        libPaths: string[],
-        libLinks: string[],
-        userOptions: string[],
-        staticLibLinks: string[],
-    ) {
-        return options.concat(
-            [this.filename(inputFilename)],
-            libIncludes,
-            libOptions,
-            libPaths,
-            libLinks,
-            userOptions,
-            staticLibLinks,
-        );
+    async processCompilerIROut(output, filters: ParseFiltersAndOutputOptions, inputFilename: string) {
+        const irLines = output.stdout.reduce((accumulator, currentValue) => accumulator.concat(currentValue.text), []);
+        return {
+            asm: HermesCompiler.processNumberedLines(irLines),
+            labelDefinitions: {},
+            languageId: 'hermes',
+        };
+    }
+
+    // Consume an array of lines formatted with line numbers as Hermes emits them
+    // and turn them into an array of {text, sourceLoc}
+    static processNumberedLines(lines: string[]) {
+        // ; file.js:20:19
+        //   %0 = CreateScopeInst %S{global#0()#1}
+        // So whenever there is an annotated line number,
+        // it applies to the next instruction.
+        const result: ParsedAsmResultLine[] = [];
+        const lineRe = /^;(\s+)(?<file>.*):(?<line>\d+):(?<col>\d+)$/;
+        let sourceLoc: AsmResultSource | null = null;
+        for (const line of lines) {
+            const match = lineRe.exec(line);
+            if (match && match.groups) {
+                const line = parseInt(match.groups.line || '0');
+                const column = parseInt(match.groups.col || '0');
+                sourceLoc = {line, column, file: null};
+                continue;
+            }
+            result.push({text: line, source: sourceLoc});
+            sourceLoc = null;
+        }
+        return result;
     }
 }
