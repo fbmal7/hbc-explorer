@@ -60,6 +60,7 @@ export {GCCRSCompiler} from './gccrs.js';
 export {GnuCobolCompiler} from './gnucobol.js';
 export {GolangCompiler} from './golang.js';
 export {HaskellCompiler} from './haskell.js';
+export {HermesCompiler} from './hermes.js';
 export {HLSLCompiler} from './hlsl.js';
 export {HookCompiler} from './hook.js';
 export {ISPCCompiler} from './ispc.js';

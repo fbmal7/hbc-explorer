@@ -49,6 +49,7 @@ export type LanguageKey =
     | 'fsharp'
     | 'go'
     | 'haskell'
+    | 'hermes'
     | 'hlsl'
     | 'hook'
     | 'ispc'

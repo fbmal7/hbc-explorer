@@ -528,6 +528,17 @@ const definitions: Record<LanguageKey, LanguageDefinition> = {
         previewFilter: null,
         monacoDisassembly: null,
     },
+    hermes: {
+        name: 'Hermes',
+        monaco: 'javascript',
+        extensions: ['.js'],
+        alias: [],
+        logoUrl: 'hermes.svg',
+        logoUrlDark: null,
+        formatter: null,
+        previewFilter: null,
+        monacoDisassembly: null,
+    },
     python: {
         name: 'Python',
         monaco: 'python',

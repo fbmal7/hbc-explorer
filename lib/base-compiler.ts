@@ -1372,6 +1372,11 @@ export class BaseCompiler implements ICompiler {
     }
 
     async checkOutputFileAndDoPostProcess(asmResult, outputFilename, filters: ParseFiltersAndOutputOptions) {
+        let contents:any = "";
+        for (var idx in asmResult.stdout){
+          contents += asmResult.stdout[idx].text + "\n";
+        }
+        fs.writeFileSync(outputFilename, contents);
         try {
             const stat = await fs.stat(outputFilename);
             asmResult.asmSize = stat.size;

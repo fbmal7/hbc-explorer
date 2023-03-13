@@ -3339,6 +3339,7 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
             throw new Error(cached.data as string);
         }
 
+        console.log("instructionSet", instructionSet);
         const response = await getAssemblyDocumentation({opcode, instructionSet});
         const body = await response.json();
         if (response.status === 200) {

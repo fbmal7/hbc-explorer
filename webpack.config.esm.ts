@@ -67,6 +67,7 @@ const plugins: Webpack.WebpackPluginInstance[] = [
             'rust',
             'swift',
             'java',
+            'javascript',
             'julia',
             'kotlin',
             'scala',
