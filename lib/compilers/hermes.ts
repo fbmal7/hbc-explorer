@@ -39,7 +39,8 @@ export class HermesCompiler extends BaseCompiler {
     static DUMP_BC = '--dump-bytecode';
     static DUMP_IR = '--dump-ir';
     static DUMP_LIR = '--dump-lir';
-    static DUMP_LOC = '-dump-source-location=loc';
+    static DUMP_LOC_PREFIX = '-dump-source-location';
+    static DUMP_LOC = HermesCompiler.DUMP_LOC_PREFIX + '=loc';
 
     constructor(compilerInfo: PreliminaryCompilerInfo, env) {
         super(compilerInfo, env);
@@ -71,14 +72,25 @@ export class HermesCompiler extends BaseCompiler {
     // We will allow users to also pass -dump-ir at the compiler.
     override optionsForFilter(filters: ParseFiltersAndOutputOptions, outputFilename: string, userOptions: string[]) {
         // If the user asked for BC or (L)IR already, don't append any new options.
-        // Otherwise default to dumping BC.
+        // Otherwise default to dumping BC. Insert location flag if user didn't add it.
         const dumpers = [HermesCompiler.DUMP_BC, HermesCompiler.DUMP_IR, HermesCompiler.DUMP_LIR];
+        let hasDumpTarget = false;
+        let hasLoc = false;
         for (const opt of userOptions) {
             if (dumpers.includes(opt)) {
-                return [];
+              hasDumpTarget = true;
+            } else if (opt.startsWith(HermesCompiler.DUMP_LOC_PREFIX)){
+              hasLoc = true;
             }
         }
-        return [HermesCompiler.DUMP_BC];
+        let computedOpts:string[] = [];
+        if (!hasDumpTarget) {
+          computedOpts.push(HermesCompiler.DUMP_BC);
+        }
+        if (!hasLoc) {
+          computedOpts.push(HermesCompiler.DUMP_LOC);
+        }
+        return computedOpts;
     }
 
     static optionsForIR(userOptions: string[]) {
